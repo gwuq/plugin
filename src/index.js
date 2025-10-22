@@ -7,42 +7,34 @@ import { showToast } from "@vendetta/ui/toasts";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const STORAGE_KEY = "textreplacer.rules.v1";
-
-type Rule = { id: string; oldText: string; newText: string };
-
-let unpatches: Array<() => void> = [];
+let unpatches = [];
 const makeId = () => Math.random().toString(36).slice(2, 9);
 
-async function loadRules(): Promise<Rule[]> {
+async function loadRules() {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as Rule[];
-  } catch (e) {
-    return [];
-  }
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
 }
 
-async function saveRules(rules: Rule[]) {
-  try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(rules));
-  } catch {}
+async function saveRules(rules) {
+  try { await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(rules)); } catch {}
 }
 
-function applyPatches(getRules: () => Rule[]) {
+function applyPatches(getRules) {
   const MessageContent = findByName("MessageContent", false) || findByName("MessageBody", false);
   if (!MessageContent) return;
 
-  const unpatch = patcher.after("default", MessageContent, (args: any[], res: any) => {
+  const unpatch = patcher.after("default", MessageContent, (args, res) => {
     try {
       const rules = getRules();
       if (!rules.length) return res;
-      const textNode = findInReactTree(res, (m: any) => typeof m?.props?.children === "string");
+      const textNode = findInReactTree(res, m => typeof m?.props?.children === "string");
       if (textNode && typeof textNode.props.children === "string") {
-        let newText = textNode.props.children as string;
+        let newText = textNode.props.children;
         for (const r of rules) {
           if (!r.oldText) continue;
-          newText = newText.split(r.oldText).join(r.newText ?? "");
+          newText = newText.split(r.oldText).join(r.newText || "");
         }
         if (newText !== textNode.props.children) textNode.props.children = newText;
       }
@@ -55,47 +47,46 @@ function applyPatches(getRules: () => Rule[]) {
 export default {
   onLoad: async () => {},
   onUnload: () => {
-    unpatches.forEach((u) => u());
+    unpatches.forEach(u => u());
     unpatches = [];
   },
   settings: () => {
-    const [rules, setRules] = React.useState<Rule[]>([]);
+    const [rules, setRules] = React.useState([]);
     const [, setTick] = React.useState(0);
     const getRules = React.useCallback(() => rules, [rules]);
 
     React.useEffect(() => {
       let mounted = true;
-      loadRules().then((loaded) => {
+      loadRules().then(loaded => {
         if (!mounted) return;
-        const normalized = loaded.map((r) => ({ id: r.id ?? makeId(), oldText: r.oldText ?? "", newText: r.newText ?? "" }));
+        const normalized = loaded.map(r => ({ id: r.id || makeId(), oldText: r.oldText || "", newText: r.newText || "" }));
         setRules(normalized);
         applyPatches(getRules);
       });
-      return () => (mounted = false);
+      return () => mounted = false;
     }, []);
 
     React.useEffect(() => {
       saveRules(rules);
-      unpatches.forEach((u) => u());
+      unpatches.forEach(u => u());
       unpatches = [];
       applyPatches(() => rules);
     }, [rules]);
 
-    const addRule = () => setRules((r) => [...r, { id: makeId(), oldText: "", newText: "" }]);
-    const removeRule = (id: string) => setRules((r) => r.filter((x) => x.id !== id));
-    const updateRule = (id: string, field: "oldText" | "newText", value: string) =>
-      setRules((rows) => rows.map((x) => (x.id === id ? { ...x, [field]: value } : x)));
+    const addRule = () => setRules(r => [...r, { id: makeId(), oldText: "", newText: "" }]);
+    const removeRule = id => setRules(r => r.filter(x => x.id !== id));
+    const updateRule = (id, field, value) => setRules(rows => rows.map(x => x.id === id ? { ...x, [field]: value } : x));
 
     return (
       <Forms.FormSection title="Text Replacements" description="Add pairs in the form 'old text' → 'new text'. Changes apply locally and persist.">
         {rules.length === 0 && <General.Text style={{ margin: 12 }}>No replacements yet — add one to get started.</General.Text>}
-        {rules.map((r) => (
-          <Forms.FormRow key={r.id} label={r.oldText || "(empty)"} subLabel={r.newText || "→ (empty)"}>
+        {rules.map(r => (
+          <Forms.FormRow key={r.id} label={r.oldText || "(empty)"} subLabel={r.newText || "→ (empty)")}>
             <Forms.FormRowItem>
               <Forms.FormTextInput
                 value={r.oldText}
                 placeholder="Old text (what to replace)"
-                onChangeText={(val: string) => updateRule(r.id, "oldText", val)}
+                onChangeText={val => updateRule(r.id, "oldText", val)}
                 onSubmitEditing={() => Keyboard.dismiss()}
               />
             </Forms.FormRowItem>
@@ -103,7 +94,7 @@ export default {
               <Forms.FormTextInput
                 value={r.newText}
                 placeholder="New text (replacement)"
-                onChangeText={(val: string) => updateRule(r.id, "newText", val)}
+                onChangeText={val => updateRule(r.id, "newText", val)}
                 onSubmitEditing={() => Keyboard.dismiss()}
               />
             </Forms.FormRowItem>
@@ -114,7 +105,7 @@ export default {
         ))}
         <Forms.FormRow>
           <Forms.FormRowItem>
-            <Forms.FormButton title="Add replacement" onPress={() => { addRule(); setTick((t) => t + 1); }} />
+            <Forms.FormButton title="Add replacement" onPress={() => { addRule(); setTick(t => t + 1); }} />
           </Forms.FormRowItem>
         </Forms.FormRow>
         <Forms.FormRow>
