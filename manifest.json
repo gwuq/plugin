@@ -1,0 +1,7 @@
+{
+  "name": "TextReplacer",
+  "description": "Replace specified text in Discord messages locally via a settings UI.",
+  "authors": [{ "name": "You", "id": "000000000000000000" }],
+  "main": "src/index.tsx",
+  "vendetta": { "icon": "ic_text" }
+}
